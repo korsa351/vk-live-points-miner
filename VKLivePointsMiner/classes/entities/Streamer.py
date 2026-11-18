@@ -12,7 +12,7 @@ class Streamer:
         self.settings = settings or {}
 
         # Информация о стриме
-        self.is_online = False
+        self.is_online = None
         self.stream_id = None
         self.title = ""
         self.viewers = 0
@@ -27,7 +27,7 @@ class Streamer:
         self.channel_info = None
 
     def __repr__(self):
-        status = "ONLINE" if self.is_online else "OFFLINE"
+        status = {True: "ONLINE", False: "OFFLINE", None: "UNKNOWN"}[self.is_online]
         return f"<Streamer {self.username} [{status}] Priority:{self.priority} Points:{self.points}>"
 
     def update_watch_time(self):

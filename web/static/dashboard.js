@@ -21,9 +21,10 @@ function channelRow(channel) {
   link.target = '_blank'
   link.rel = 'noopener'
   name.append(link)
+  const status = { true: 'В эфире', false: 'Офлайн', null: 'Нет данных' }[channel.is_online]
   row.append(
     name,
-    cell('td', channel.is_active ? 'Активен' : channel.is_online ? 'В эфире' : 'Офлайн',
+    cell('td', channel.is_active ? 'Активен' : status,
       channel.is_online ? 'online' : 'muted'),
     cell('td', channel.is_online ? numberFormat.format(channel.viewers) : '—'),
     cell('td', channel.points == null ? '—' : numberFormat.format(channel.points)),

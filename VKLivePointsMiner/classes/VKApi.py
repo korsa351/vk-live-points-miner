@@ -21,6 +21,7 @@ class VKApi:
         self.session_data = {}
         self._refresh_lock = Lock()
         self.user_id = None
+        self.user_channel = None
         self.ws_token = None
 
     def _headers(self, referer_slug: Optional[str] = None) -> dict:
@@ -64,16 +65,18 @@ class VKApi:
         """GET /v8/actor - получить информацию о пользователе"""
         resp = self._request("GET", Endpoint.GET_USER, headers=self._headers())
         resp.raise_for_status()
-        data = resp.json()
-        self.user_id = data["id"]
-        return data
+        data = self._response_data(resp.json())
+        actor = data.get("actor", data)
+        self.user_id = actor["id"]
+        self.user_channel = actor.get("webSocketChannels", {}).get("user_private", {}).get("name")
+        return actor
 
     def get_ws_token(self) -> str:
         """GET /v8/actor/web_socket/connection - получить JWT для WebSocket"""
         resp = self._request("GET", Endpoint.GET_WS_TOKEN, headers=self._headers())
         resp.raise_for_status()
-        data = resp.json()
-        self.ws_token = data["token"]
+        data = self._response_data(resp.json())
+        self.ws_token = data.get("webSocketConnection", data)["token"]
         return self.ws_token
 
     def get_channel_info(self, slug: str) -> dict:
@@ -81,7 +84,12 @@ class VKApi:
         url = Endpoint.GET_CHANNEL.format(slug=slug)
         resp = self._request("GET", url, headers=self._headers(slug))
         resp.raise_for_status()
-        return resp.json()
+        data = self._response_data(resp.json())
+        return data.get("channel", data)
+
+    @staticmethod
+    def _response_data(payload):
+        return payload.get("data", payload) if isinstance(payload, dict) else payload
 
     def check_stream_status(self, slug: str) -> Optional[dict]:
         """GET /v8/channel/{slug}/stream/slot/default - проверить статус стрима"""
@@ -91,13 +99,20 @@ class VKApi:
         resp.raise_for_status()
         if resp.status_code == 204:
             return None
-        data = resp.json()
-        if not data["isOnline"]:
+        data = self._response_data(resp.json())
+        stream = data.get("stream", data)
+        if stream is None:
             return None
+        if "status" in stream:
+            if stream["status"] != "online":
+                return None
+        elif not stream["isOnline"]:
+            return None
+
         return {
-            "stream_id": data["streamId"],
-            "title": data.get("title", ""),
-            "viewers": data.get("viewers", 0)
+            "stream_id": stream.get("id") or stream["streamId"],
+            "title": stream.get("title", ""),
+            "viewers": (stream.get("counters") or {}).get("viewers", stream.get("viewers", 0)),
         }
 
     def send_heartbeat(self, slug: str, stream_id: str) -> bool:
@@ -131,7 +146,8 @@ class VKApi:
 
         resp = self._request("GET", url, headers=self._headers(slug))
         resp.raise_for_status()
-        return resp.json()["balance"]
+        data = self._response_data(resp.json())
+        return data.get("channelPoint", data)["balance"]
 
     def get_pending_bonus(self, slug: str) -> Optional[str]:
         """GET /v1/channel/{slug}/point/pending_bonus/ - проверить наличие бонуса"""
@@ -141,8 +157,14 @@ class VKApi:
         resp.raise_for_status()
         if resp.status_code == 204 or not resp.content:
             return None
-        data = resp.json()
-        return data.get("id") if isinstance(data, dict) else None
+        data = self._response_data(resp.json())
+        if isinstance(data, dict):
+            if "bonuses" not in data:
+                return data.get("id")
+            data = data["bonuses"]
+        if isinstance(data, list):
+            return next((bonus["id"] for bonus in data if isinstance(bonus, dict) and bonus.get("id")), None)
+        return None
 
     def claim_bonus(self, slug: str, bonus_id: str) -> bool:
         """PUT /v1/channel/{slug}/point/pending_bonus/{bonus_id}/gather - собрать бонус"""
@@ -150,8 +172,6 @@ class VKApi:
         headers = self._headers(slug)
         headers["Content-Type"] = "application/x-www-form-urlencoded"
 
-        try:
-            resp = self._request("PUT", url, headers=headers, data="")
-            return 200 <= resp.status_code < 300
-        except Exception:
-            return False
+        resp = self._request("PUT", url, headers=headers, data="")
+        resp.raise_for_status()
+        return 200 <= resp.status_code < 300

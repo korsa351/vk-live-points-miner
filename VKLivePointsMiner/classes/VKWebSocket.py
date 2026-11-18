@@ -96,8 +96,11 @@ class VKWebSocket:
             logger.warning("WebSocket error: %s", error)
 
     def subscribe_user_channel(self):
-        if self.api.user_id:
-            self._set_subscription(f"users#{self.api.user_id}", subscribe=True)
+        channel = self.api.user_channel
+        if not channel and self.api.user_id:
+            channel = f"users#{self.api.user_id}"
+        if channel:
+            self._set_subscription(channel, subscribe=True)
 
     def subscribe_channel(self, channel_id):
         self._set_subscription(f"channel-info:{channel_id}", subscribe=True)

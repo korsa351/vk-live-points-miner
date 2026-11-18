@@ -54,7 +54,7 @@ class VKLiveMiner:
             } for streamer in self.streamers]
             return {
                 "total_streamers": len(channels),
-                "online_count": sum(channel["is_online"] for channel in channels),
+                "online_count": sum(channel["is_online"] is True for channel in channels),
                 "active_count": sum(channel["is_active"] for channel in channels),
                 "streamers": channels,
             }
@@ -231,7 +231,9 @@ class VKLiveMiner:
             "stream_online_status", "stream_slot_online_status"
         ):
             self._events.put(("stream", data.get("blogUrl")))
-        elif channel.startswith("users#") and ("bonus" in event.lower() or "reward" in event.lower()):
+        elif (channel == self.api.user_channel or channel.startswith("users#")) and (
+            "bonus" in event.lower() or "reward" in event.lower()
+        ):
             self._events.put(("bonus", data.get("channelSlug") or data.get("blogUrl")))
         else:
             return

@@ -140,7 +140,7 @@ def test_unauthorized_retry_uses_reloaded_session(tmp_path, monkeypatch):
 
 
 def test_websocket_restores_pending_subscriptions_after_authentication():
-    api = Mock(user_id=17)
+    api = Mock(user_id=17, user_channel="personal#17")
     callback = Mock()
     client = VKWebSocket(api, callback)
     socket = Mock()
@@ -155,7 +155,7 @@ def test_websocket_restores_pending_subscriptions_after_authentication():
     assert frames == [
         {"id": 1, "connect": {"token": "fake", "name": "js"}},
         {"id": 2, "subscribe": {"channel": "channel-info:23"}},
-        {"id": 3, "subscribe": {"channel": "users#17"}},
+        {"id": 3, "subscribe": {"channel": "personal#17"}},
         {},
     ]
     client._on_message(socket, '{"push":{"channel":"users#17","pub":{"data":{"type":"bonus"}}}}')
