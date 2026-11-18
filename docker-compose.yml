@@ -5,7 +5,12 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./config:/app/config:ro
+      - type: bind
+        source: ./config.json
+        target: /app/config.json
+        read_only: true
+        bind:
+          create_host_path: false
       - ./cookies:/app/cookies
       - ./logs:/app/logs
     environment:

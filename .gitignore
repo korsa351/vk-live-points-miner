@@ -38,7 +38,8 @@ env/
 cookies/
 logs/
 analytics/
-config/
+/config/
+/config.json
 /history.md
 /plan.md
 

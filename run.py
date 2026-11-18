@@ -8,7 +8,7 @@ import sys
 import threading
 from pathlib import Path
 
-DEFAULT_CONFIG = Path("config/config.json")
+DEFAULT_CONFIG = Path("config.json")
 BUNDLED_CONFIG = Path(__file__).resolve().with_name("config.example.json")
 
 
@@ -26,9 +26,12 @@ def main():
     from VKLivePointsMiner.logger import configure_logging
 
     try:
-        config_path = args.config or (DEFAULT_CONFIG if DEFAULT_CONFIG.exists() else BUNDLED_CONFIG)
+        using_defaults = args.config is None and not DEFAULT_CONFIG.exists()
+        config_path = BUNDLED_CONFIG if using_defaults else args.config or DEFAULT_CONFIG
         with config_path.open(encoding="utf-8-sig") as file:
             config = json.load(file)
+        if using_defaults:
+            config["streamers"] = []
         configure_logging(config.get("logging", {}))
         miner = VKLiveMiner(config)
         web = VKWebServer(miner)

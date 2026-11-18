@@ -5,6 +5,7 @@
 venv
 .venv
 config/
+config.json
 cookies/
 logs/
 analytics/

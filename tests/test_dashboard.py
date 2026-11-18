@@ -46,7 +46,7 @@ def test_dashboard_exposes_only_statistics(tmp_path, monkeypatch):
     assert response.cache_control.no_store
 
     for path in ("/log", "/api/streamers", "/cookies/session.json",
-                 "/config/config.json", "/static/../../cookies/session.json"):
+                 "/config.json", "/static/../../cookies/session.json"):
         assert client.get(path).status_code == 404
     assert client.post("/api/auth/browser").status_code == 404
     assert client.post("/api/streamers", json={"slug": "new"}).status_code == 404

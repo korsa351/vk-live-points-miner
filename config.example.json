@@ -1,5 +1,8 @@
 {
-  "streamers": [],
+  "streamers": [
+    {"slug": "streamer1", "priority": 1},
+    {"slug": "streamer2", "priority": 2}
+  ],
   "settings": {
     "heartbeat_interval": 60,
     "monitor_interval": 120,
