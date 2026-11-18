@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VK Live Points Miner</title>
+  <link rel="stylesheet" href="/static/dashboard.css">
+  <script src="/static/dashboard.js" defer></script>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>VK Live Points Miner</h1>
+    </header>
+
+    <p id="connection-error" class="error" role="alert" hidden></p>
+
+    <section aria-labelledby="channels-title">
+      <div class="section-heading">
+        <h2 id="channels-title">Статистика каналов</h2>
+        <span id="channel-count"></span>
+      </div>
+      <p id="empty-channels" class="muted">Загрузка статистики…</p>
+      <div class="stats-table">
+        <table id="stats-table" aria-labelledby="channels-title" hidden>
+          <thead>
+            <tr>
+              <th scope="col">Канал</th>
+              <th scope="col">Статус</th>
+              <th scope="col">Зрители</th>
+              <th scope="col">Баллы</th>
+              <th scope="col">Время просмотра</th>
+            </tr>
+          </thead>
+          <tbody id="channels"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

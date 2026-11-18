@@ -1,0 +1,12 @@
+.git
+.local-deps
+.pytest_cache
+**/__pycache__
+venv
+.venv
+config/
+cookies/
+logs/
+analytics/
+history.md
+plan.md

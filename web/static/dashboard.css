@@ -1,0 +1,30 @@
+* { box-sizing: border-box; }
+:root {
+  color-scheme: dark;
+  font-family: system-ui, sans-serif;
+  color: #e8eef8;
+  background: #0d1320;
+  --muted: #a1afc5;
+  --line: #2a374d;
+}
+body { margin: 0; }
+main { width: min(940px, 100% - 32px); margin: 40px auto; }
+h1 { font-size: clamp(1.6rem, 5vw, 2.3rem); margin: 0; }
+h2 { font-size: 1.15rem; margin: 0; }
+.section-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.section-heading span, .muted { color: var(--muted); }
+.online { color: #81e4bb; }
+section { margin-top: 20px; padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: #161f2e; }
+.stats-table { overflow-x: auto; }
+table { width: 100%; margin-top: 14px; border-collapse: collapse; text-align: left; }
+th, td { padding: 12px; border-bottom: 1px solid var(--line); }
+thead th { color: var(--muted); font-size: .85rem; font-weight: 500; }
+tbody tr:last-child > * { border-bottom: 0; }
+td { white-space: nowrap; font-variant-numeric: tabular-nums; }
+a { color: #a0cdff; overflow-wrap: anywhere; }
+.error { color: #ffacab; }
+:focus-visible { outline: 2px solid #91bdff; outline-offset: 3px; }
+@media (max-width: 520px) {
+  main { margin-top: 24px; }
+  section { padding: 14px; }
+}

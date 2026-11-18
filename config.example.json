@@ -1,0 +1,15 @@
+{
+  "streamers": [],
+  "settings": {
+    "heartbeat_interval": 60,
+    "monitor_interval": 120,
+    "max_active_slots": 2,
+    "jitter_percent": 10
+  },
+  "logging": {
+    "console_level": "INFO",
+    "file_level": "DEBUG",
+    "save_to_file": true,
+    "rotation_days": 7
+  }
+}

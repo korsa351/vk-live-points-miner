@@ -1,0 +1,14 @@
+services:
+  vk-miner:
+    build: .
+    container_name: vk-live-miner
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config:/app/config:ro
+      - ./cookies:/app/cookies
+      - ./logs:/app/logs
+    environment:
+      - TZ=Europe/Moscow
+    restart: unless-stopped
+    stop_grace_period: 45s
