@@ -3,6 +3,7 @@
   "settings": {
     "heartbeat_interval": 60,
     "monitor_interval": 120,
+    "bonus_poll_interval": 60,
     "max_active_slots": 2,
     "jitter_percent": 10
   },

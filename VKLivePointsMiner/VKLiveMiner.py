@@ -34,10 +34,11 @@ class VKLiveMiner:
         self.max_active_slots = min(2, max(1, int(settings.get("max_active_slots", 2))))
         self.monitor_interval = float(settings.get("monitor_interval", 120))
         self.heartbeat_interval = float(settings.get("heartbeat_interval", 60))
+        self.bonus_poll_interval = float(settings.get("bonus_poll_interval", 60))
         self.jitter = float(settings.get("jitter_percent", 10)) / 100
-        intervals = (self.monitor_interval, self.heartbeat_interval)
+        intervals = (self.monitor_interval, self.heartbeat_interval, self.bonus_poll_interval)
         if not all(math.isfinite(interval) and interval > 0 for interval in intervals):
-            raise ValueError("Monitor and heartbeat intervals must be positive, finite numbers")
+            raise ValueError("Monitor, heartbeat and bonus intervals must be positive, finite numbers")
         if not 0 <= self.jitter < 1:
             raise ValueError("jitter_percent must be in [0, 100)")
 
@@ -96,6 +97,7 @@ class VKLiveMiner:
 
     def _run(self, monitor):
         monitor_at = 0
+        bonus_poll_at = 0
         pending_poll = None
         refresh = False
         subscriptions = set()
@@ -105,6 +107,12 @@ class VKLiveMiner:
         while not self._stop.is_set():
             self._wake.clear()
             refresh = self._apply_events(channels, bonuses) or refresh
+            now = time.monotonic()
+            if now >= bonus_poll_at:
+                for streamer in channels:
+                    bonuses.setdefault(streamer.username, now)
+                bonus_poll_at = now + self.bonus_poll_interval
+
             if pending_poll is not None and pending_poll.done():
                 self._apply_channel_status(pending_poll.result())
                 pending_poll = None
@@ -134,17 +142,15 @@ class VKLiveMiner:
                     self._heartbeat(streamer, stream_id)
                     heartbeat_at[streamer] = time.monotonic() + self._interval(self.heartbeat_interval)
 
-            for slug, due in list(bonuses.items()):
-                if self._stop.is_set():
-                    break
-                if time.monotonic() >= due:
-                    del bonuses[slug]
-                    self._claim_bonus(slug)
+            slug = min(bonuses, key=bonuses.get, default=None)
+            if slug is not None and bonuses[slug] <= time.monotonic() and not self._stop.is_set():
+                del bonuses[slug]
+                self._claim_bonus(slug)
 
-            deadlines = [*heartbeat_at.values(), *bonuses.values()]
+            deadlines = [bonus_poll_at, *heartbeat_at.values(), *bonuses.values()]
             if pending_poll is None:
                 deadlines.append(monitor_at)
-            wait = max(0, min(deadlines) - time.monotonic()) if deadlines else None
+            wait = max(0, min(deadlines) - time.monotonic())
             self._wake.wait(wait)
 
     def _interval(self, interval):

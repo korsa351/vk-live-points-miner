@@ -170,6 +170,7 @@ def test_running_miner_detects_session_file_and_uses_configured_channels(tmp_pat
     })
     heartbeat = Event()
     bonus_claimed = Event()
+    bonus_available = Event()
     session_checked = Event()
     fake_api = Mock(user_id=17)
     fake_api.get_user_info.return_value = {"id": 17}
@@ -178,7 +179,9 @@ def test_running_miner_detects_session_file_and_uses_configured_channels(tmp_pat
     }
     fake_api.get_channel_info.return_value = {"id": 23}
     fake_api.get_points_balance.return_value = 27
-    fake_api.get_pending_bonus.return_value = "first-bonus"
+    fake_api.get_pending_bonus.side_effect = (
+        lambda slug: "first-bonus" if bonus_available.is_set() else None
+    )
     fake_api.claim_bonus.side_effect = lambda *_: bonus_claimed.set() or True
 
     def send(slug, stream_id):
@@ -212,6 +215,7 @@ def test_running_miner_detects_session_file_and_uses_configured_channels(tmp_pat
         fake_api.send_heartbeat.assert_called_once_with("first", "first-stream")
         fake_socket.subscribe_channel.assert_called_once_with(23)
         assert miner.statistics()["streamers"][0]["is_active"]
+        bonus_available.set()
         miner._on_ws_message("users#17", {"type": "bonus", "channelSlug": "first"})
         assert bonus_claimed.wait(2)
         fake_api.claim_bonus.assert_called_once_with("first", "first-bonus")
@@ -221,3 +225,41 @@ def test_running_miner_detects_session_file_and_uses_configured_channels(tmp_pat
     assert not worker.is_alive()
     fake_socket.close.assert_called_once()
     fake_api.stop_heartbeat.assert_called_once_with("first", "first-stream")
+
+
+def test_miner_checks_offline_channel_bonuses_without_websocket_events(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    miner = VKLiveMiner({
+        "streamers": [{"slug": "offline"}],
+        "settings": {"bonus_poll_interval": 0.05},
+    })
+    miner.auth.save_session(SESSION)
+    miner.api = Mock(user_id=17)
+    miner.api.check_stream_status.return_value = None
+    miner.api.get_channel_info.return_value = {"id": 23}
+    miner.api.get_points_balance.return_value = 50
+    bonuses = iter(["before-start", None, "while-offline"])
+    miner.api.get_pending_bonus.side_effect = lambda slug: next(bonuses, None)
+    both_claimed = Event()
+
+    def claim(slug, bonus_id):
+        if bonus_id == "while-offline":
+            both_claimed.set()
+        return True
+
+    miner.api.claim_bonus.side_effect = claim
+    monkeypatch.setattr("VKLivePointsMiner.VKLiveMiner.VKWebSocket", lambda *_: Mock())
+    worker = Thread(target=miner.start, daemon=True)
+    worker.start()
+    try:
+        assert both_claimed.wait(3)
+    finally:
+        miner.stop()
+        worker.join(3)
+
+    assert not worker.is_alive()
+    assert [call.args for call in miner.api.claim_bonus.call_args_list] == [
+        ("offline", "before-start"), ("offline", "while-offline"),
+    ]
+    miner.api.send_heartbeat.assert_not_called()
+    assert miner.statistics()["streamers"][0]["points"] == 50
