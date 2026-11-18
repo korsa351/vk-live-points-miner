@@ -219,7 +219,6 @@ class VKLiveMiner:
             else:
                 with self._lock:
                     streamer.last_heartbeat = None
-                logger.warning("Heartbeat failed for %s", streamer.username)
         except Exception as error:
             logger.warning("Could not update %s: %s", streamer.username, error)
 

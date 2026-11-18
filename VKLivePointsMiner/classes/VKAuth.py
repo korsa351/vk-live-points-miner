@@ -66,32 +66,36 @@ class VKAuth:
             if temporary is not None:
                 temporary.unlink(missing_ok=True)
 
+    @staticmethod
+    def refresh_due(session):
+        return session["expires_at"] / 1000 <= time.time() + 7 * 86400
+
     def refresh_token_if_needed(self, *, force=False):
         session = self.load_session()
-        days_until_expiry = (session["expires_at"] / 1000 - time.time()) / 86400
-        if days_until_expiry > 7 and not force:
+        if not force and not self.refresh_due(session):
             return True
 
         try:
             auth_cookie = {key: session[field] for field, key in TOKEN_FIELDS.items()}
+            cookies = requests.cookies.RequestsCookieJar()
+            domain = urllib.parse.urlsplit(VK_LIVE_BASE).hostname
+            cookies.set("_clientId", session["client_id"], domain=domain, secure=True)
+            cookies.set("auth", urllib.parse.quote(json.dumps(auth_cookie)), domain=domain, secure=True)
             response = requests.get(
                 VK_LIVE_BASE,
                 headers={"User-Agent": session["user_agent"]},
-                cookies={
-                    "_clientId": session["client_id"],
-                    "auth": urllib.parse.quote(json.dumps(auth_cookie)),
-                },
+                cookies=cookies,
+                allow_redirects=False,
                 timeout=10,
             )
             response.raise_for_status()
-            for result in reversed([*response.history, response]):
-                value = result.cookies.get("auth")
-                if value:
-                    updated = json.loads(urllib.parse.unquote(value))
-                    session.update({field: updated[key] for field, key in TOKEN_FIELDS.items()})
-                    self.save_session(self._validate_session(session))
-                    logger.info("VK Live session refreshed")
-                    return True
+            value = response.cookies.get("auth")
+            if value:
+                updated = json.loads(urllib.parse.unquote(value))
+                session.update({field: updated[key] for field, key in TOKEN_FIELDS.items()})
+                self.save_session(self._validate_session(session))
+                logger.info("VK Live session refreshed")
+                return True
         except (requests.RequestException, OSError, ValueError, KeyError, TypeError):
             logger.warning("VK Live session refresh failed")
             return False

@@ -1,7 +1,9 @@
 """VK Live API Client"""
 
-from typing import Optional
+import logging
+import time
 from threading import Lock
+from typing import Optional
 
 try:
     from curl_cffi import requests
@@ -12,6 +14,9 @@ except ImportError:
 
 from ..constants import Endpoint, DEFAULT_HEADERS, VK_LIVE_BASE
 
+logger = logging.getLogger(__name__)
+SESSION_HEADERS = ("Authorization", "User-Agent", "X-From-Id")
+
 
 class VKApi:
     """HTTP клиент для работы с VK Live API"""
@@ -20,6 +25,7 @@ class VKApi:
         self.auth = auth
         self.session_data = {}
         self._refresh_lock = Lock()
+        self._next_proactive_refresh = 0
         self.user_id = None
         self.user_channel = None
         self.ws_token = None
@@ -41,25 +47,32 @@ class VKApi:
         return headers
 
     def _request(self, method: str, url: str, **kwargs):
-        """Выполнить HTTP запрос с обработкой 401"""
+        """Обновить сессию при необходимости и повторить запрос после 401."""
         kwargs.setdefault("timeout", 10)
         if HAS_CURL_CFFI:
             kwargs["impersonate"] = "chrome120"
-        response = requests.request(method, url, **kwargs)
-        if response.status_code != 401:
-            return response
-
         headers = kwargs["headers"]
+        self._refresh_headers(headers)
+        response = requests.request(method, url, **kwargs)
+        if response.status_code == 401 and self._refresh_headers(headers, force=True):
+            response = requests.request(method, url, **kwargs)
+        return response
+
+    def _refresh_headers(self, headers, *, force=False):
         with self._refresh_lock:
-            self.session_data = self.auth.load_session()
-            if headers["Authorization"] == self._headers()["Authorization"]:
-                if not self.auth.refresh_token_if_needed(force=True):
-                    return response
+            if force or (
+                time.monotonic() >= self._next_proactive_refresh
+                and self.auth.refresh_due(self.session_data)
+            ):
                 self.session_data = self.auth.load_session()
+                if headers["Authorization"] == self._headers()["Authorization"]:
+                    self._next_proactive_refresh = time.monotonic() + 60
+                    if self.auth.refresh_token_if_needed(force=force):
+                        self.session_data = self.auth.load_session()
             updated = self._headers()
-            for name in ("Authorization", "User-Agent", "X-From-Id"):
-                headers[name] = updated[name]
-        return requests.request(method, url, **kwargs)
+            changed = any(headers.get(name) != updated[name] for name in SESSION_HEADERS)
+            headers.update({name: updated[name] for name in SESSION_HEADERS})
+            return changed
 
     def get_user_info(self) -> dict:
         """GET /v8/actor - получить информацию о пользователе"""
@@ -123,10 +136,12 @@ class VKApi:
 
         try:
             resp = self._request("PUT", url, headers=headers, data="")
-            return 200 <= resp.status_code < 300
+            if 200 <= resp.status_code < 300:
+                return True
+            logger.warning("Heartbeat failed for %s (HTTP %s)", slug, resp.status_code)
         except Exception as e:
-            print(f"❌ Heartbeat error for {slug}: {e}")
-            return False
+            logger.warning("Heartbeat error for %s: %s", slug, e)
+        return False
 
     def stop_heartbeat(self, slug: str, stream_id: str) -> bool:
         """PUT .../heartbeat?isStop=true - остановить просмотр"""

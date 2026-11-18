@@ -1,9 +1,11 @@
 import json
+import time
 from threading import Event, Thread
 from unittest.mock import Mock
 from urllib.parse import quote
 
 import requests
+import pytest
 
 from VKLivePointsMiner.VKLiveMiner import VKLiveMiner
 from VKLivePointsMiner.VKWebServer import VKWebServer
@@ -79,7 +81,10 @@ def test_refresh_updates_the_mounted_session_file(tmp_path, monkeypatch):
     monkeypatch.setattr(requests, "get", request)
 
     assert auth.refresh_token_if_needed(force=True)
-    assert request.call_args.kwargs["cookies"]["_clientId"] == SESSION["client_id"]
+    kwargs = request.call_args.kwargs
+    assert kwargs["allow_redirects"] is False
+    assert kwargs["cookies"]["_clientId"] == SESSION["client_id"]
+    assert all(cookie.domain == "live.vkvideo.ru" and cookie.secure for cookie in kwargs["cookies"])
     assert auth.load_session() == {
         **SESSION, "user_agent": DEFAULT_USER_AGENT, "access_token": "replacement-access",
         "refresh_token": "replacement-refresh", "expires_at": 1826478013073,
@@ -117,7 +122,10 @@ def test_slot_switch_stops_previous_stream_id(tmp_path, monkeypatch):
 
 def test_unauthorized_retry_uses_reloaded_session(tmp_path, monkeypatch):
     auth = VKAuth(str(tmp_path))
-    session = {**SESSION, "access_token": "old", "user_agent": "test"}
+    session = {
+        **SESSION, "access_token": "old", "user_agent": "test",
+        "expires_at": int(time.time() * 1000) + 30 * 86400 * 1000,
+    }
     auth.save_session(session)
     api = VKApi(auth)
     module = __import__(VKApi.__module__, fromlist=["requests"])
@@ -137,6 +145,36 @@ def test_unauthorized_retry_uses_reloaded_session(tmp_path, monkeypatch):
     response = api._request("GET", "https://example.invalid", headers=api._headers("slug"))
     assert response.status_code == 200
     assert sent == ["Bearer old", "Bearer new"]
+
+
+@pytest.mark.parametrize("refresh_succeeds", [True, False])
+def test_expiring_session_refreshes_before_first_request(tmp_path, monkeypatch, refresh_succeeds):
+    auth = VKAuth(tmp_path)
+    session = {**SESSION, "expires_at": int(time.time() * 1000) + 60 * 1000}
+    auth.save_session(session)
+    api = VKApi(auth)
+    module = __import__(VKApi.__module__, fromlist=["requests"])
+    sent = []
+
+    def send(method, url, *, headers, **kwargs):
+        sent.append((headers["Authorization"], headers["Referer"]))
+        return Mock(status_code=200)
+
+    def refresh(*, force):
+        if refresh_succeeds:
+            auth.save_session({**session, "access_token": "new"})
+        return refresh_succeeds
+
+    refresh_mock = Mock(side_effect=refresh)
+    monkeypatch.setattr(module.requests, "request", send)
+    monkeypatch.setattr(auth, "refresh_token_if_needed", refresh_mock)
+
+    for _ in range(2):
+        assert api._request("GET", "https://example.invalid", headers=api._headers("slug")).status_code == 200
+
+    refresh_mock.assert_called_once_with(force=False)
+    expected = "new" if refresh_succeeds else SESSION["access_token"]
+    assert sent == [(f"Bearer {expected}", "https://live.vkvideo.ru/slug")] * 2
 
 
 def test_websocket_restores_pending_subscriptions_after_authentication():

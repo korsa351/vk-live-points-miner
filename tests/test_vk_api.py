@@ -69,3 +69,9 @@ def test_bonus_list_balance_and_claim_failure(api):
     reply(api, {"error": "forbidden"}, status=403)
     with pytest.raises(HTTPError, match="403"):
         api.claim_bonus("channel", "pending-id")
+
+
+def test_heartbeat_logs_http_status_when_rejected(api, caplog):
+    reply(api, {"error": "forbidden"}, status=403)
+    assert not api.send_heartbeat("channel", "stream-id")
+    assert "Heartbeat failed for channel (HTTP 403)" in caplog.text
