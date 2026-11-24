@@ -23,10 +23,13 @@ def reply(api, payload, *, status=200):
 
 
 def test_v8_stream_status_uses_nested_stream_and_viewer_count(api):
-    stream = {"id": "stream-id", "status": "online", "title": "Live", "counters": {"viewers": 451}}
+    stream = {
+        "id": "stream-id", "status": "online", "title": "Live", "counters": {"viewers": 451},
+        "flags": {"isLiked": True},
+    }
     reply(api, {"data": {"stream": stream}, "refs": {}})
     assert api.check_stream_status("channel") == {
-        "stream_id": "stream-id", "title": "Live", "viewers": 451,
+        "stream_id": "stream-id", "title": "Live", "viewers": 451, "is_liked": True,
     }
 
     reply(api, {"data": {"stream": {**stream, "status": "offline"}}, "refs": {}})
@@ -75,3 +78,12 @@ def test_heartbeat_logs_http_status_when_rejected(api, caplog):
     reply(api, {"error": "forbidden"}, status=403)
     assert not api.send_heartbeat("channel", "stream-id")
     assert "Heartbeat failed for channel (HTTP 403)" in caplog.text
+
+
+def test_like_uses_captured_reaction_request(api):
+    reply(api, None, status=204)
+    assert api.like_stream("channel", "stream-id")
+    api._request.assert_called_once_with(
+        "POST", "https://api.live.vkvideo.ru/v8/reaction", headers={},
+        json={"contentId": "stream-id", "contentType": "stream", "reactionType": "heart"},
+    )

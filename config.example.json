@@ -4,6 +4,7 @@
     {"slug": "streamer2", "priority": 2}
   ],
   "settings": {
+    "auto_like": true,
     "heartbeat_interval": 60,
     "monitor_interval": 120,
     "bonus_poll_interval": 60,

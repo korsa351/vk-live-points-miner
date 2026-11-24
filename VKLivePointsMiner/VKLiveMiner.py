@@ -31,6 +31,8 @@ class VKLiveMiner:
         self._wake = threading.Event()
         self._events = SimpleQueue()
         settings = config.get("settings", {})
+        self.auto_like = settings.get("auto_like", True)
+        self._liked_stream_ids = set()
         self.max_active_slots = min(2, max(1, int(settings.get("max_active_slots", 2))))
         self.monitor_interval = float(settings.get("monitor_interval", 120))
         self.heartbeat_interval = float(settings.get("heartbeat_interval", 60))
@@ -181,6 +183,8 @@ class VKLiveMiner:
                 streamer.stream_id = info["stream_id"] if info else None
                 streamer.title = info["title"] if info else ""
                 streamer.viewers = info["viewers"] if info else 0
+                if info and info.get("is_liked"):
+                    self._liked_stream_ids.add(info["stream_id"])
 
     def _update_active_slots(self):
         with self._lock:
@@ -208,6 +212,8 @@ class VKLiveMiner:
         return changed
 
     def _heartbeat(self, streamer, stream_id):
+        if self.auto_like and stream_id not in self._liked_stream_ids:
+            self._like_stream(streamer.username, stream_id)
         try:
             if self.api.send_heartbeat(streamer.username, stream_id):
                 with self._lock:
@@ -221,6 +227,16 @@ class VKLiveMiner:
                     streamer.last_heartbeat = None
         except Exception as error:
             logger.warning("Could not update %s: %s", streamer.username, error)
+
+    def _like_stream(self, slug, stream_id):
+        try:
+            if self.api.like_stream(slug, stream_id):
+                self._liked_stream_ids.add(stream_id)
+                logger.info("Liked stream %s on %s", stream_id, slug)
+            else:
+                logger.warning("VK Live did not accept like for %s", slug)
+        except Exception as error:
+            logger.warning("Could not like the stream on %s: %s", slug, error)
 
     def _on_ws_message(self, channel, data):
         event = data.get("type", "")

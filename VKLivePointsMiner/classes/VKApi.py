@@ -126,7 +126,19 @@ class VKApi:
             "stream_id": stream.get("id") or stream["streamId"],
             "title": stream.get("title", ""),
             "viewers": (stream.get("counters") or {}).get("viewers", stream.get("viewers", 0)),
+            "is_liked": (stream.get("flags") or {}).get("isLiked", stream.get("isLiked", False)),
         }
+
+    def like_stream(self, slug: str, stream_id: str) -> bool:
+        response = self._request(
+            "POST", Endpoint.STREAM_REACTION, headers=self._headers(slug), json={
+                "contentId": stream_id,
+                "contentType": "stream",
+                "reactionType": "heart",
+            },
+        )
+        response.raise_for_status()
+        return 200 <= response.status_code < 300
 
     def send_heartbeat(self, slug: str, stream_id: str) -> bool:
         """PUT /v8/channel/{slug}/stream/{stream_id}/heartbeat - отправить сигнал просмотра"""

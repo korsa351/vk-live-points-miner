@@ -1,7 +1,7 @@
 import json
 import time
 from threading import Event, Thread
-from unittest.mock import Mock
+from unittest.mock import Mock, call
 from urllib.parse import quote
 
 import requests
@@ -118,6 +118,27 @@ def test_slot_switch_stops_previous_stream_id(tmp_path, monkeypatch):
     miner._update_active_slots()
     miner.api.stop_heartbeat.assert_called_with("first", "first-new")
     assert [item["slug"] for item in miner.statistics()["streamers"] if item["is_active"]] == ["backup"]
+
+
+def test_active_stream_like_is_retried_on_failure_and_deduplicated():
+    miner = VKLiveMiner({"streamers": [{"slug": "channel"}]})
+    streamer = miner.streamers[0]
+    miner.api = Mock()
+    miner.api.like_stream.side_effect = [OSError("temporary failure"), True, True]
+    miner.api.send_heartbeat.return_value = False
+    miner._apply_channel_status({
+        streamer: {"stream_id": "already-liked", "title": "", "viewers": 0, "is_liked": True},
+    })
+
+    for stream_id in ("already-liked", "first", "first", "first", "second"):
+        miner._heartbeat(streamer, stream_id)
+    assert miner.api.like_stream.call_args_list == [
+        call("channel", "first"), call("channel", "first"), call("channel", "second"),
+    ]
+
+    miner.auto_like = False
+    miner._heartbeat(streamer, "third")
+    assert miner.api.like_stream.call_count == 3
 
 
 def test_unauthorized_retry_uses_reloaded_session(tmp_path, monkeypatch):

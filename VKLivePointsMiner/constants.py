@@ -14,6 +14,7 @@ class Endpoint:
     # Канал и стрим
     GET_CHANNEL = f"{VK_API_BASE}/v8/channel/{{slug}}"
     GET_STREAM_STATUS = f"{VK_API_BASE}/v8/channel/{{slug}}/stream/slot/default"
+    STREAM_REACTION = f"{VK_API_BASE}/v8/reaction"
 
     # Heartbeat
     SEND_HEARTBEAT = f"{VK_API_BASE}/v8/channel/{{slug}}/stream/{{stream_id}}/heartbeat"
